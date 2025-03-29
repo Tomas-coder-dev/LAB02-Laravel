@@ -1,53 +1,40 @@
 # Usa una imagen oficial de PHP con Apache
 FROM php:8.2-apache
 
-# Instala dependencias necesarias para Laravel
+# Instala dependencias del sistema
 RUN apt-get update && apt-get install -y \
-    libpq-dev \
-    unzip \
-    curl \
     git \
-    && docker-php-ext-install pdo pdo_pgsql
+    curl \
+    unzip \
+    libpq-dev \
+    libzip-dev \
+    zip \
+    libonig-dev \
+    libxml2-dev \
+    libpng-dev \
+    libjpeg-dev \
+    libfreetype6-dev \
+    && docker-php-ext-configure zip \
+    && docker-php-ext-install pdo pdo_pgsql zip
+
+# Habilita mod_rewrite de Apache
+RUN a2enmod rewrite
 
 # Instala Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
-# Habilita mod_rewrite para Laravel
-RUN a2enmod rewrite
+# Copia todo el código del proyecto al contenedor
+COPY . /var/www/html
 
-# Copia los archivos de la aplicación
-COPY . /var/www/html/
-
-# Configura Apache para servir Laravel desde 'public'
-RUN echo '<VirtualHost *:80>
-    ServerAdmin webmaster@localhost
-    DocumentRoot /var/www/html/public
-    <Directory /var/www/html/public>
-        AllowOverride All
-        Require all granted
-    </Directory>
-    ErrorLog ${APACHE_LOG_DIR}/error.log
-    CustomLog ${APACHE_LOG_DIR}/access.log combined
-</VirtualHost>' > /etc/apache2/sites-available/000-default.conf \
-    && a2ensite 000-default.conf \
-    && service apache2 restart
-
-# Establece permisos correctos para Laravel
-RUN chown -R www-data:www-data /var/www/html \
-    && chmod -R 775 /var/www/html/storage /var/www/html/bootstrap/cache
-
-# Establece el directorio de trabajo en Laravel
+# Establece el directorio de trabajo
 WORKDIR /var/www/html
 
-# Instala dependencias de Laravel
-RUN composer install --no-dev --optimize-autoloader  
+# Establece permisos correctos
+RUN chown -R www-data:www-data /var/www/html \
+    && chmod -R 755 /var/www/html/storage /var/www/html/bootstrap/cache
 
-# Ejecuta comandos de optimización de Laravel
-RUN php artisan route:cache && \
-    php artisan view:cache
+# Ejecuta Composer install
+RUN composer install --no-dev --optimize-autoloader
 
-# Expone el puerto 80 para Apache
+# Exponer el puerto
 EXPOSE 80
-
-# Comando para iniciar Apache
-CMD ["apache2-foreground"]
