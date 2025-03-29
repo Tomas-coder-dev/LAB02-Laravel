@@ -1,40 +1,34 @@
-# Usa una imagen oficial de PHP con Apache
-FROM php:8.2-apache
+FROM php:8.2-cli
 
-# Instala dependencias del sistema
+# Instalar dependencias del sistema
 RUN apt-get update && apt-get install -y \
+    unzip \
     git \
     curl \
-    unzip \
     libpq-dev \
-    libzip-dev \
-    zip \
     libonig-dev \
-    libxml2-dev \
-    libpng-dev \
-    libjpeg-dev \
-    libfreetype6-dev \
-    && docker-php-ext-configure zip \
-    && docker-php-ext-install pdo pdo_pgsql zip
+    && docker-php-ext-install pdo pdo_pgsql mbstring
 
-# Habilita mod_rewrite de Apache
-RUN a2enmod rewrite
-
-# Instala Composer
+# Instalar Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
-# Copia todo el código del proyecto al contenedor
+# Configurar directorios
+WORKDIR /var/www/html
 COPY . /var/www/html
 
-# Establece el directorio de trabajo
-WORKDIR /var/www/html
+# Configurar permisos
+RUN chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache \
+    && chmod -R 775 /var/www/html/storage /var/www/html/bootstrap/cache
 
-# Establece permisos correctos
-RUN chown -R www-data:www-data /var/www/html \
-    && chmod -R 755 /var/www/html/storage /var/www/html/bootstrap/cache
-
-# Ejecuta Composer install
+# Instalar dependencias de Laravel
 RUN composer install --no-dev --optimize-autoloader
 
-# Exponer el puerto
+# Configurar variables de entorno
+ARG APP_ENV=production
+ENV APP_ENV=${APP_ENV}
+
+# Exponer puerto usado por Artisan
 EXPOSE 80
+
+# Comando de inicio con migraciones antes de iniciar el servidor
+CMD php artisan migrate --force && php artisan serve --host=0.0.0.0 --port=80
